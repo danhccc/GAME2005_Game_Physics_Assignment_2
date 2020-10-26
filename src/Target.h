@@ -16,11 +16,17 @@ public:
 
 	bool isGravityEnabled = false;
 
+	void doThrow();			// Assignment 1
 	glm::vec2 throwSpeed;
 	glm::vec2 throwPosition;
-	void doThrow();
 
+	glm::vec2 releaseSpeed;		// Assignment 2
+	glm::vec2 releasePosition;		
+	float velocity, acceleration, acceleFric;
+	bool checker = true;
+	void release();
 private:
+
 	void m_move();
 	void m_checkBounds();
 	void m_reset();

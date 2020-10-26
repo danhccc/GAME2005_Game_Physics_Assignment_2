@@ -6,7 +6,7 @@
 struct Transform
 {
 	glm::vec2 position;
-	glm::vec2 rotation;
+	float rotation;			// Changed for Assignment 2
 	glm::vec2 scale;
 };
 #endif /* defined (__TRANSFORM__) */

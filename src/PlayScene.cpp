@@ -1,11 +1,16 @@
 #include "PlayScene.h"
 #include "Game.h"
 #include "EventManager.h"
+#include <cmath>
+#include <math.h>
 
 // required for IMGUI
 #include "imgui.h"
 #include "imgui_sdl.h"
 #include "Renderer.h"
+#include "Util.h"
+
+#define PI 3.14159265418;
 
 PlayScene::PlayScene()
 {
@@ -18,7 +23,7 @@ PlayScene::~PlayScene()
 void PlayScene::draw()
 {
 	TextureManager::Instance()->draw("playBackground", 640, 360, 0, 225, true);
-	TextureManager::Instance()->draw("enemy", 625, 570, 0, 225, true, SDL_FLIP_HORIZONTAL);
+	//TextureManager::Instance()->draw("enemy", 625, 570, 0, 225, true, SDL_FLIP_HORIZONTAL);
 
 	drawDisplayList();
 	SDL_SetRenderDrawColor(Renderer::Instance()->getRenderer(), 255, 255, 255, 255);
@@ -43,64 +48,6 @@ void PlayScene::handleEvents()
 {
 	EventManager::Instance().update();
 
-	// handle player movement with GameController
-	if (SDL_NumJoysticks() > 0)
-	{
-		if (EventManager::Instance().getGameController(0) != nullptr)
-		{
-			const auto deadZone = 10000;
-			if (EventManager::Instance().getGameController(0)->LEFT_STICK_X > deadZone)
-			{
-				m_pPlayer->setAnimationState(PLAYER_RUN_RIGHT);
-				m_playerFacingRight = true;
-			}
-			else if (EventManager::Instance().getGameController(0)->LEFT_STICK_X < -deadZone)
-			{
-				m_pPlayer->setAnimationState(PLAYER_RUN_LEFT);
-				m_playerFacingRight = false;
-			}
-			else
-			{
-				if (m_playerFacingRight)
-				{
-					m_pPlayer->setAnimationState(PLAYER_IDLE_RIGHT);
-				}
-				else
-				{
-					m_pPlayer->setAnimationState(PLAYER_IDLE_LEFT);
-				}
-			}
-		}
-	}
-
-
-	// handle player movement if no Game Controllers found
-	if (SDL_NumJoysticks() < 1)
-	{
-		if (EventManager::Instance().isKeyDown(SDL_SCANCODE_A))
-		{
-			m_pPlayer->setAnimationState(PLAYER_RUN_LEFT);
-			m_playerFacingRight = false;
-		}
-		else if (EventManager::Instance().isKeyDown(SDL_SCANCODE_D))
-		{
-			m_pPlayer->setAnimationState(PLAYER_RUN_RIGHT);
-			m_playerFacingRight = true;
-		}
-		else
-		{
-			if (m_playerFacingRight)
-			{
-				m_pPlayer->setAnimationState(PLAYER_IDLE_RIGHT);
-			}
-			else
-			{
-				m_pPlayer->setAnimationState(PLAYER_IDLE_LEFT);
-			}
-		}
-	}
-	
-
 	if (EventManager::Instance().isKeyDown(SDL_SCANCODE_ESCAPE))
 	{
 		TheGame::Instance()->quit();
@@ -120,23 +67,14 @@ void PlayScene::handleEvents()
 void PlayScene::start()
 {
 	TextureManager::Instance()->load("../Assets/textures/playBG.png", "playBackground");
-	TextureManager::Instance()->load("../Assets/sprites/stormtroopers.png", "enemy");
+	//TextureManager::Instance()->load("../Assets/sprites/stormtroopers.png", "enemy");
 
 	// Set GUI Title
 	m_guiTitle = "Play Scene";
-	
-	// Plane Sprite
-	//m_pPlaneSprite = new Plane();
-	//addChild(m_pPlaneSprite);
 
-	// Player Sprite
-	m_pPlayer = new Player();
-	addChild(m_pPlayer);
-	m_playerFacingRight = true;
-
-	// Bomb Sprite
-	m_pBomb = new Target();
-	addChild(m_pBomb);	
+	// Crate Sprite
+	m_pCrate = new Target();
+	addChild(m_pCrate);
 	
 	// Back Button
 	m_pBackButton = new Button("../Assets/textures/backButton.png", "backButton", BACK_BUTTON);
@@ -180,9 +118,11 @@ void PlayScene::start()
 	addChild(m_pNextButton);
 
 	/* Instructions Label */
-	m_pInstructionsLabel = new Label("Press the backtick (`) character to toggle Debug View", "Consolas");
-	m_pInstructionsLabel->getTransform()->position = glm::vec2(Config::SCREEN_WIDTH * 0.5f, 700.0f);
+	m_pInstructionsLabel = new Label("Press the backtick (`) to see the ramp", "Consolas");
+	m_pInstructionsLabel->getTransform()->position = glm::vec2(Config::SCREEN_WIDTH * 0.5f, 100.0f);
 	addChild(m_pInstructionsLabel);
+
+
 }
 
 void PlayScene::GUI_Function() const
@@ -195,57 +135,109 @@ void PlayScene::GUI_Function() const
 	
 	ImGui::Begin("Physics stuff", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_MenuBar);
 
-	if(ImGui::Button("THROW"))
+	static float  run = 400.0f, rise = 300.0f, mass = 12.8, CFriction = 0.42, theta = 36.87;
+	static float rotateAngle = tanh((150 + run) / (550 - rise)) * 180 / PI;
+	static float startLocation, hypotenuse, netforce, acceleration, groundFriction;
+	hypotenuse = sqrt(rise * rise + run * run);
+	netforce = mass * (rise / hypotenuse);
+	groundFriction = mass * CFriction * 9.8;
+
+	m_pCrate->acceleration = netforce / mass;
+	m_pCrate->getRigidBody()->acceleration.x = m_pCrate->acceleration * (run / hypotenuse);
+	m_pCrate->getRigidBody()->acceleration.y = m_pCrate->acceleration * (rise / hypotenuse);
+	m_pCrate->acceleFric = groundFriction / mass;
+
+	glm::vec2 original = glm::vec2(150, 550);
+	glm::vec2 riseEnd = glm::vec2(150, 550 - rise);
+	glm::vec2 runEnd = glm::vec2(150 + run, 550);
+	glm::vec4 colorOfLine = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+	Util::normalize(original);
+
+	Util::DrawLine(original, riseEnd, colorOfLine);
+	Util::DrawLine(original, runEnd, colorOfLine);
+	Util::DrawLine(riseEnd, runEnd, colorOfLine);
+
+	m_pCrate->releasePosition = glm::vec2(original.x, original.y - rise);
+	glm::vec2 theVelocity = m_pCrate->getRigidBody()->velocity;
+
+	if (ImGui::SliderFloat("Rise", &rise, 0.0f, 500.0f))
 	{
-		std::cout << "THROW Pressed" << std::endl;
-		m_pBomb->doThrow();
+		std::cout << "Rise(Y) changed!" << std::endl;
+ 	}
+
+	if (ImGui::SliderFloat("Run", &run, 0.0f, 1000.0f))
+	{
+		std::cout << "Run(X) changed!" << std::endl;
 	}
 
-	static int xPlayerPos = 140;
-	float Vx = 0, Vy = 0;
-	float hVelocity = 0;
-	float vAngle = 1 / sin(Vy / 95);
-	static float velocityAngle[2] = { 0 , 0 };
-
-	if (ImGui::Button("a) Solution"))
+	if (ImGui::SliderFloat("Mass", &mass, 0.0f, 100.0f))
 	{
-		xPlayerPos = 140;
-		m_pPlayer->getTransform()->position.x = 140;
-		m_pBomb->throwPosition = glm::vec2(140, 570);
-		velocityAngle[0] = 95;
-		velocityAngle[1] = 15.88;
-		m_pBomb->throwSpeed = glm::vec2(velocityAngle[0], -velocityAngle[1]);
-		m_pBomb->doThrow();
+		std::cout << "Mass changed!" << std::endl;
 	}
 
-	if (ImGui::Button("b) Solution"))
+	if (ImGui::SliderFloat("Friction", &CFriction, 0.0f, 10.0f))
 	{
-		xPlayerPos = 140;
-		m_pPlayer->getTransform()->position.x = 140;
-		m_pBomb->throwPosition = glm::vec2(140, 570);
-		velocityAngle[0] = 95;
-		velocityAngle[1] = 45;
-		m_pBomb->throwSpeed = glm::vec2(velocityAngle[0], -velocityAngle[1]);
-		m_pBomb->doThrow();
+		std::cout << "Friction changed!" << std::endl;
 	}
 
+	if (ImGui::SliderFloat("Theta", &theta, 0.0f, 90.0f))
+	{
+		m_pCrate->getTransform()->rotation = theta;
+		std::cout << "Theta changed!" << std::endl;
+	}
+
+	/******************************************************************/
+
+	if (ImGui::Button("Solution"))
+	{
+		rise = 300.0f;
+		run = 400.0f;
+		mass = 12.8;
+		CFriction = 0.42;
+		m_pCrate->getTransform()->position.x = original.x + 40;
+		m_pCrate->getTransform()->position.y = original.y - rise - 40;
+		m_pCrate->getRigidBody()->velocity.x = 0;
+		m_pCrate->getRigidBody()->velocity.y = 0;
+		m_pCrate->acceleration = netforce / mass;
+		m_pCrate->getTransform()->rotation = theta;
+		m_pCrate->release();
+	}
+
+	/******************************************************************/
+
+	if(ImGui::Button("RELEASE"))
+	{
+		std::cout << "Crate released" << std::endl;
+		m_pCrate->acceleration = netforce / mass;
+		m_pCrate->release();
+	}
+
+	/******************************************************************/
+
+	if(ImGui::Button("RESET"))
+	{
+		rise = 300.0f;
+		run = 400.0f;
+		mass = 12.8;
+		CFriction = 0.42;
+		m_pCrate->getTransform()->position.x = original.x;
+		m_pCrate->getTransform()->position.y = original.y - rise;
+		m_pCrate->getRigidBody()->velocity.x = 0;
+		m_pCrate->getRigidBody()->velocity.y = 0;
+		m_pCrate->acceleration = 0;
+		m_pCrate->getTransform()->rotation = 0;
+		m_pCrate->release();
+	}
+	
 	ImGui::Separator();
 
-	// Bomb always has gravity
-	m_pBomb->isGravityEnabled = true;
-	
-	// Player location
-	if (ImGui::SliderInt("Player Position on X", &xPlayerPos, 140, 1140))
-	{
-		m_pPlayer->getTransform()->position.x = xPlayerPos;
-		m_pBomb->throwPosition = glm::vec2(xPlayerPos, 570);
-	}
+	ImGui::Value("Mass", mass);
+	ImGui::Value("Position on X", m_pCrate->getTransform()->position.x);
+	ImGui::Value("Position on Y", m_pCrate->getTransform()->position.y);
+	ImGui::Value("Velocity on X", m_pCrate->getRigidBody()->velocity.x);
+	ImGui::Value("Velocity on Y", m_pCrate->getRigidBody()->velocity.y);
+	ImGui::Value("Acceleration", m_pCrate->acceleration);
 
-	// Bomb Vx and Vy
-	if (ImGui::SliderFloat2("Throw Speed | Throw Angle", velocityAngle, 0, 100))
-	{
-		m_pBomb->throwSpeed = glm::vec2(velocityAngle[0], -velocityAngle[1]);
-	}
 	
 	ImGui::End();
 	ImGui::EndFrame();
@@ -254,4 +246,9 @@ void PlayScene::GUI_Function() const
 	ImGui::Render();
 	ImGuiSDL::Render(ImGui::GetDrawData());
 	ImGui::StyleColorsDark();
+}
+
+float rotateAngles(float x, float y)
+{
+	return tanh((150 + y) / (550 - x)) * 180 / PI;
 }

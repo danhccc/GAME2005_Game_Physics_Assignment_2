@@ -30,7 +30,8 @@ private:
 	
 	glm::vec2 m_mousePosition;
 
-	Target* m_pBomb;
+	//Target* m_pBomb;
+	Target* m_pCrate;
 	Plane* m_pPlaneSprite;
 	Player* m_pPlayer;
 	bool m_playerFacingRight;
